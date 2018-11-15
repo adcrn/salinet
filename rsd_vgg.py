@@ -10,8 +10,6 @@
 """
 
 import tflearn
-import numpy as np
-import math
 
 
 def rsd_vgg(incoming, num_classes):

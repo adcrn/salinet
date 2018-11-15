@@ -1,0 +1,15 @@
+model:
+  name: rsd_vgg
+  network:
+    num_classes: 2
+    image_size: 224
+    color_dims: 3
+    stride: 16
+    sal_pred_conv_init: xavier
+    subit_fc_init: uniform
+    momentum: 0.9
+    weight_decay: 0.0005
+    lr: 0.0001
+  thresholds:
+    strong_evidence: 0.7
+    peak_detection: [0.95, 0.9, 0.8, 0.6]

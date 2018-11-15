@@ -4,7 +4,7 @@ import collections
 import cv2
 import math
 import numpy as np
-from scipy import linalg
+from scipy import linalg, ndimage
 import xml.etree.ElementTree as ET
 
 
@@ -88,7 +88,7 @@ def x_y_element(x, y, boxes, stride):
         power = power * -0.5
         print("power: ", power)
 
-        # Figure out how to test if v_xy is in roi
+        # Test to figure out if v_xy is in R_B_i
         # if (v_x > xmin and v_x < xmax) and (v_y > ymin and v_y < ymax)
         if (v_xy[0] * stride > box[0] and v_xy[0] * stride < box[1]) and (v_xy[1] * stride > box[2] and v_xy[1] * stride < box[3]):
             indicator = 1
@@ -182,7 +182,7 @@ def multi_box_gen(sal_map, n_sub, confidence_threshold=0.7):
     peaks = set()
     boxes = set()
 
-    while len(peaks) < n_sub:
+    while len(peaks) <= n_sub:
         for threshold in peak_detection_thresholds:
             sal_map_gray = cv2.cvtColor(sal_map, cv2.COLOR_BGR2GRAY)
             ret, thresh = cv2.threshold(sal_map_gray, 255 * threshold, 255, cv2.THRESH_BINARY)
@@ -198,14 +198,27 @@ def multi_box_gen(sal_map, n_sub, confidence_threshold=0.7):
         if sal_map[peak[0]][peak[1]] < confidence_threshold:
             peaks -= peak
 
+    print("Amount of peaks: ", len(peaks))
+
     # find separating lines
     vert_lines = []
     horiz_lines = []
     peak_list = list(peaks)
 
+    # TODO: find "connected" peaks and get lines that connect them
+    # TODO: get all lines perpendicular to those lines connecting peaks
+
     # iterate through each pair of peaks
     for i, pi in enumerate(peak_list):
         for pj in peak_list[i+1:]:
+
+            # test to see if there is a line connecting the peaks
+            if pi[0] == pj[0]:
+                # score all lines perpendicular to the x-line
+                pass
+            elif pi[1] == pj[1]:
+                # score all lines perpendicular to the y-line
+                pass
 
             # find the min and max locations for the peaks for the range
             min_x, min_y = min(pi[0], pj[0]), min(pi[1], pj[1])
@@ -260,5 +273,38 @@ def multi_box_gen(sal_map, n_sub, confidence_threshold=0.7):
         # pass the ROI to the single box generator
         # function and add to the set of boxes
         boxes |= single_box_gen(roi)
+
+    return boxes
+
+def multi_box_gen_scipy(sal_map, n_sub):
+    
+    # A neighborhood will be used to analyze all neighboring cells of the image
+    neighborhood = ndimage.generate_binary_structure(2,2)
+
+    local_max = ndimage.maximum_filter(image, footprint=neighborhood)
+
+    # Create mask of background
+    background = (sal_map == 0)
+
+    # Should erode the background, otherwise there will be line along the
+    # border of the image which will be mistaken for a peak
+    eroded_background = ndimage.binary_erosion(background, structure=neighborhood, border_value=1)
+
+    # As the masks are just binary arrays, a simple XOR should work to remove
+    # the background of the image, leaving only the detected peaks
+    detected_peaks = local_max ^ eroded_background
+
+    # Label peaks in image, dom't care about number of features at this time
+    labels, _ = ndimage.measurements.label(detected_peaks)
+
+    # Get slices for each peak
+    peaks = ndimage.measurements.find_objects(labels)
+
+    boxes = set()
+
+    # Add bounding box for peak to box set
+    # (single_box_gen does need additional work to support slices)
+    for peak in peaks:
+        boxes |= single_box_gen(peak)
 
     return boxes
